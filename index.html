@@ -1,0 +1,2259 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VenPOS Pro AI | Sistema POS, Inventario & Calculadora BCV/Cashea</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Identity Services (OAuth2 para Google Drive) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        cashea: {
+                            DEFAULT: '#FACC15',
+                            dark: '#EAB308',
+                            light: '#FEF08A',
+                            text: '#0F172A'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Personalización de barras de desplazamiento y utilidades visuales */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+
+        .cashea-glow {
+            box-shadow: 0 0 18px rgba(250, 204, 21, 0.25);
+        }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt * { visibility: visible; }
+            #printable-receipt {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white !important;
+                color: black !important;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased transition-colors duration-200 selection:bg-emerald-500/30">
+
+    <!-- Contenedor Principal App -->
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- BARRA LATERAL (Sidebar) -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 transform -translate-x-full lg:translate-x-0 lg:static lg:inset-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-transform duration-300 ease-in-out">
+            <div>
+                <!-- Logo / Marca -->
+                <div class="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                            <i data-lucide="layers" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <span class="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-blue-500">VenPOS</span>
+                            <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-500 ml-1">AI</span>
+                        </div>
+                    </div>
+                    <button onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Navegación -->
+                <nav class="p-4 space-y-1.5">
+                    <button onclick="switchTab('pos')" id="nav-pos" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                        <span>Punto de Venta (POS)</span>
+                    </button>
+
+                    <button onclick="switchTab('inventory')" id="nav-inventory" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-all">
+                        <i data-lucide="package" class="w-5 h-5"></i>
+                        <span class="flex-1 text-left">Inventario y Precios</span>
+                        <span id="sidebar-inv-count" class="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">0</span>
+                    </button>
+
+                    <button onclick="switchTab('calculator')" id="nav-calculator" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-all">
+                        <i data-lucide="calculator" class="w-5 h-5"></i>
+                        <span>Calculadora Rápida</span>
+                    </button>
+
+                    <button onclick="switchTab('cloud')" id="nav-cloud" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-all">
+                        <i data-lucide="sheet" class="w-5 h-5 text-emerald-500"></i>
+                        <span class="flex-1 text-left">Google Sheets Sync</span>
+                        <span id="sidebar-sync-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Panel Parámetros Fijos de Fórmula -->
+            <div class="p-4 m-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <span>Reglas de Precio</span>
+                    <button onclick="openSettingsModal()" class="text-blue-500 hover:underline text-[11px] flex items-center gap-1">
+                        <i data-lucide="sliders-horizontal" class="w-3 h-3"></i> Configurar
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                    <div class="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div class="text-[10px] text-slate-400">Ganancia</div>
+                        <div id="badge-margin" class="text-xs font-bold font-mono text-emerald-500">40%</div>
+                    </div>
+                    <div class="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                        <div class="text-[10px] text-slate-400">IVA</div>
+                        <div id="badge-iva" class="text-xs font-bold font-mono text-blue-500">16%</div>
+                    </div>
+                    <div class="p-1.5 rounded-lg bg-cashea/20 border border-cashea/50">
+                        <div class="text-[10px] text-amber-600 dark:text-cashea">Cashea</div>
+                        <div id="badge-cashea" class="text-xs font-bold font-mono text-amber-600 dark:text-cashea">+10%</div>
+                    </div>
+                </div>
+                <div class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium leading-snug">
+                    Método: <strong id="badge-margin-mode">Margen Bruto Real (/ 0.60)</strong>
+                </div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                    Ajuste: <code class="text-[10px] text-emerald-500">(Costo × Binance) ÷ BCV</code>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ÁREA PRINCIPAL -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+            <!-- HEADER SUPERIOR: Tasas en Tiempo Real + Estado Nube -->
+            <header class="h-auto min-h-[4rem] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 z-30">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <div>
+                        <h1 id="page-title" class="text-base sm:text-lg font-bold tracking-tight">Punto de Venta (POS)</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Cálculo automático BCV / Binance / Cashea en tiempo real</p>
+                    </div>
+                </div>
+
+                <!-- Controles Rápidos de Tasa BCV y Binance -->
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <!-- Input Tasa BCV -->
+                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-500 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Tasa BCV (Bs)
+                            </span>
+                            <div class="flex items-center gap-1">
+                                <span class="text-xs text-slate-400 font-mono">Bs.</span>
+                                <input type="number" step="0.01" id="input-rate-bcv" value="45.00" onchange="updateRates()" oninput="updateRates()"
+                                    class="w-20 bg-transparent font-mono font-bold text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Tasa Binance -->
+                    <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Binance USDT
+                            </span>
+                            <div class="flex items-center gap-1">
+                                <span class="text-xs text-slate-400 font-mono">Bs.</span>
+                                <input type="number" step="0.01" id="input-rate-binance" value="52.00" onchange="updateRates()" oninput="updateRates()"
+                                    class="w-20 bg-transparent font-mono font-bold text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Brecha Cambiaria Badge -->
+                    <div class="hidden md:flex flex-col items-end px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <span class="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Factor Ajuste</span>
+                        <span id="header-spread-factor" class="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">1.1556x (+15.6%)</span>
+                    </div>
+
+                    <!-- Badge Estado Google Sheets Sync -->
+                    <button onclick="switchTab('cloud')" id="header-sync-badge" title="Estado de sincronización con Google Sheets"
+                        class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">
+                        <i data-lucide="sheet" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline" id="header-sync-text">Modo Local / Listo Sheets</span>
+                    </button>
+
+                    <!-- Botón Modo Oscuro / Claro -->
+                    <button onclick="toggleTheme()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Cambiar tema">
+                        <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                        <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- CONTENIDO SCROLLEABLE -->
+            <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
+
+                <!-- TARJETAS DE KPIs GLOBALES -->
+                <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total Productos / Stock</span>
+                            <div class="p-2 rounded-xl bg-blue-500/10 text-blue-500"><i data-lucide="boxes" class="w-4 h-4"></i></div>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <span id="kpi-total-skus" class="text-2xl font-extrabold font-mono">0</span>
+                            <span class="text-xs text-slate-400">SKUs (<span id="kpi-total-units" class="font-semibold text-slate-600 dark:text-slate-300">0</span> unds)</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Valor Inventario (Contado)</span>
+                            <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-500"><i data-lucide="wallet" class="w-4 h-4"></i></div>
+                        </div>
+                        <div class="text-xl sm:text-2xl font-extrabold font-mono text-emerald-500" id="kpi-inv-usd">$0.00</div>
+                        <div class="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" id="kpi-inv-bs">Bs. 0,00</div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-cashea/40 rounded-2xl p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-amber-600 dark:text-cashea">Valor Inventario Cashea</span>
+                            <div class="p-2 rounded-xl bg-cashea/20 text-amber-600 dark:text-cashea"><i data-lucide="sparkles" class="w-4 h-4"></i></div>
+                        </div>
+                        <div class="text-xl sm:text-2xl font-extrabold font-mono text-amber-500 dark:text-cashea" id="kpi-inv-cashea-usd">$0.00</div>
+                        <div class="text-xs font-mono text-slate-500 dark:text-slate-400 truncate" id="kpi-inv-cashea-bs">Bs. 0,00</div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Ventas del Día</span>
+                            <div class="p-2 rounded-xl bg-purple-500/10 text-purple-500"><i data-lucide="trending-up" class="w-4 h-4"></i></div>
+                        </div>
+                        <div class="text-xl sm:text-2xl font-extrabold font-mono text-purple-500" id="kpi-sales-usd">$0.00</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400"><span id="kpi-sales-count" class="font-bold">0</span> transacciones hoy</div>
+                    </div>
+                </section>
+
+                <!-- =========================================================
+                     MÓDULO 1: PUNTO DE VENTA (POS)
+                ========================================================= -->
+                <section id="tab-pos" class="tab-content grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Catálogo de Productos -->
+                    <div class="lg:col-span-7 xl:col-span-8 space-y-4">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
+                            <div class="relative flex-1">
+                                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                                <input type="text" id="pos-search" oninput="renderPOSCatalog()" placeholder="Buscar producto por nombre, SKU o categoría..."
+                                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none border border-transparent focus:border-emerald-500">
+                            </div>
+                            <select id="pos-category-filter" onchange="renderPOSCatalog()"
+                                class="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-medium outline-none border border-transparent focus:border-emerald-500">
+                                <option value="ALL">Todas las categorías</option>
+                            </select>
+                        </div>
+
+                        <!-- Grid de Tarjetas de Productos -->
+                        <div id="pos-catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5"></div>
+                    </div>
+
+                    <!-- Carrito y Facturación -->
+                    <div class="lg:col-span-5 xl:col-span-4">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sticky top-4 space-y-4 shadow-lg">
+                            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                                <h2 class="font-bold text-base flex items-center gap-2">
+                                    <i data-lucide="receipt" class="w-5 h-5 text-emerald-500"></i>
+                                    Orden Actual
+                                </h2>
+                                <button onclick="clearCart()" class="text-xs text-rose-500 hover:underline font-medium">Vaciar</button>
+                            </div>
+
+                            <!-- Selector Modalidad de Pago: Contado vs Cashea -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setPaymentMode('CONTADO')" id="btn-mode-contado"
+                                    class="p-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-left transition-all">
+                                    <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400">CONTADO (BCV)</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Precio base + IVA 16%</div>
+                                </button>
+                                <button onclick="setPaymentMode('CASHEA')" id="btn-mode-cashea"
+                                    class="p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 hover:border-cashea bg-slate-50 dark:bg-slate-800/50 text-left transition-all">
+                                    <div class="text-xs font-extrabold text-amber-600 dark:text-cashea flex items-center gap-1">
+                                        <i data-lucide="zap" class="w-3.5 h-3.5"></i> CASHEA (+10%)
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Inicial + 3 cuotas</div>
+                                </button>
+                            </div>
+
+                            <!-- Lista de Items en Carrito -->
+                            <div id="pos-cart-items" class="space-y-2.5 max-h-64 overflow-y-auto pr-1"></div>
+
+                            <!-- Desglose de Totales -->
+                            <div class="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-2 text-sm">
+                                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                                    <span>Base Imponible:</span>
+                                    <span id="cart-subtotal" class="font-mono font-semibold">$0.00</span>
+                                </div>
+                                <div class="flex justify-between text-slate-500 dark:text-slate-400">
+                                    <span>IVA (<span id="cart-iva-pct">16</span>%):</span>
+                                    <span id="cart-iva" class="font-mono font-semibold">$0.00</span>
+                                </div>
+                                <div id="cart-cashea-row" class="hidden justify-between text-amber-600 dark:text-cashea font-semibold">
+                                    <span>Comisión Cashea (<span id="cart-cashea-pct">10</span>%):</span>
+                                    <span id="cart-cashea-fee" class="font-mono">$0.00</span>
+                                </div>
+
+                                <!-- Total Destacado -->
+                                <div id="cart-total-box" class="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 mt-2 transition-colors">
+                                    <div class="flex items-baseline justify-between">
+                                        <span class="text-xs font-bold uppercase tracking-wider">Total a Cobrar</span>
+                                        <span id="cart-total-usd" class="text-2xl font-black font-mono text-emerald-500">$0.00</span>
+                                    </div>
+                                    <div class="flex items-baseline justify-between mt-1">
+                                        <span class="text-xs text-slate-500 dark:text-slate-400">Equivalente Bolívares:</span>
+                                        <span id="cart-total-bs" class="text-base font-bold font-mono text-slate-800 dark:text-slate-200">Bs. 0,00</span>
+                                    </div>
+                                    <div id="cart-cashea-installments" class="hidden mt-2 pt-2 border-t border-amber-500/30 text-[11px] font-bold text-slate-900">
+                                        Inicial (60%): <span id="cashea-downpayment" class="font-mono">$0.00</span> • 3 Cuotas de: <span id="cashea-quota" class="font-mono">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="processSale()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+                                <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                                <span>Procesar Venta y Emitir Ticket</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- =========================================================
+                     MÓDULO 2: INVENTARIO MULTIFUNCIONAL & CARGA MASIVA IA
+                ========================================================= -->
+                <section id="tab-inventory" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2.5 flex-1">
+                            <div class="relative flex-1 min-w-[220px]">
+                                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                                <input type="text" id="inv-search" oninput="renderInventoryTable()" placeholder="Filtrar inventario por SKU, nombre o categoría..."
+                                    class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none border border-transparent focus:border-blue-500">
+                            </div>
+                            <select id="inv-filter-cat" onchange="renderInventoryTable()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-medium outline-none">
+                                <option value="ALL">Todas las categorías</option>
+                            </select>
+                            <select id="inv-filter-stock" onchange="renderInventoryTable()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-medium outline-none">
+                                <option value="ALL">Todo el Stock</option>
+                                <option value="LOW">Stock Bajo (≤ 5)</option>
+                                <option value="OUT">Agotados (0)</option>
+                            </select>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <!-- BOTÓN CARGA MASIVA CON IA -->
+                            <button onclick="openAIBulkModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-500/25 flex items-center gap-2 transition-all">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i>
+                                <span>Carga Masiva con IA</span>
+                            </button>
+
+                            <button onclick="openProductModal()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition-all">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Nuevo Producto</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tabla Multifuncional de Inventario y Precios -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                        <th class="py-3.5 px-4">SKU / Producto</th>
+                                        <th class="py-3.5 px-3 text-center">Stock</th>
+                                        <th class="py-3.5 px-3 text-right">Costo Base ($)</th>
+                                        <th class="py-3.5 px-3 text-right">Ajustado BCV</th>
+                                        <th class="py-3.5 px-3 text-right">Base + Ganancia</th>
+                                        <th class="py-3.5 px-3 text-right text-emerald-500">Contado (+16% IVA)</th>
+                                        <th class="py-3.5 px-4 text-right bg-cashea/20 text-amber-700 dark:text-cashea">Precio Cashea (+10%)</th>
+                                        <th class="py-3.5 px-4 text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventory-table-body" class="divide-y divide-slate-200 dark:divide-slate-800 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- =========================================================
+                     MÓDULO 3: CALCULADORA RÁPIDA DE PRECIOS + ESTRATEGIAS DE MARGEN
+                ========================================================= -->
+                <section id="tab-calculator" class="tab-content hidden max-w-5xl mx-auto space-y-5">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-lg space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+                            <div>
+                                <h2 class="text-lg font-bold flex items-center gap-2">
+                                    <i data-lucide="calculator" class="w-5 h-5 text-blue-500"></i>
+                                    Calculadora de Estructura de Costos y Margen Bruto Real
+                                </h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Compara métodos de ganancia y calcula al instante Contado BCV vs Cashea.</p>
+                            </div>
+                            <span id="calc-formula-rates" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold text-emerald-500 border border-slate-200 dark:border-slate-700">
+                                52.00 ÷ 45.00 = 1.1556x
+                            </span>
+                        </div>
+
+                        <!-- Selector Interactivo de las 4 Estrategias de Margen -->
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-400">Selecciona Estrategia de Margen de Ganancia Bruta</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                <button type="button" onclick="selectMarginStrategy('GROSS_MARGIN')" id="strat-btn-GROSS_MARGIN"
+                                    class="strat-btn p-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-left transition-all">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-extrabold text-emerald-500">1. Margen Bruto Real</span>
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950">REC.</span>
+                                    </div>
+                                    <div class="text-[11px] font-mono text-slate-500 dark:text-slate-300 mt-1">Costo ÷ (1 - %M)</div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">40% = dividir entre 0.60</div>
+                                </button>
+
+                                <button type="button" onclick="selectMarginStrategy('MARKUP')" id="strat-btn-MARKUP"
+                                    class="strat-btn p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left transition-all">
+                                    <div class="text-xs font-extrabold text-blue-500">2. Markup Lineal</div>
+                                    <div class="text-[11px] font-mono text-slate-500 dark:text-slate-300 mt-1">Costo × (1 + %M)</div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">40% = multiplicar × 1.40</div>
+                                </button>
+
+                                <button type="button" onclick="selectMarginStrategy('CASHEA_PROTECTED')" id="strat-btn-CASHEA_PROTECTED"
+                                    class="strat-btn p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left transition-all">
+                                    <div class="text-xs font-extrabold text-amber-500">3. Protegido Cashea</div>
+                                    <div class="text-[11px] font-mono text-slate-500 dark:text-slate-300 mt-1">Costo ÷ (1 - %M - %C)</div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">Blinda ganancia ante cuotas</div>
+                                </button>
+
+                                <button type="button" onclick="selectMarginStrategy('CATEGORY_DYNAMIC')" id="strat-btn-CATEGORY_DYNAMIC"
+                                    class="strat-btn p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left transition-all">
+                                    <div class="text-xs font-extrabold text-purple-500">4. Dinámico Categoría</div>
+                                    <div class="text-[11px] font-mono text-slate-500 dark:text-slate-300 mt-1">30% / 40% / 50%</div>
+                                    <div class="text-[10px] text-slate-400 mt-0.5">Según rotación o rubro</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Costo Reposición Base ($ USDT)</label>
+                                <input type="number" step="0.01" id="calc-cost" value="10.00" oninput="runQuickCalculator()"
+                                    class="w-full px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-lg font-bold outline-none border border-slate-300 dark:border-slate-700 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Porcentaje Ganancia (%)</label>
+                                <input type="number" step="1" id="calc-margin" value="40" oninput="runQuickCalculator()"
+                                    class="w-full px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-lg font-bold outline-none border border-slate-300 dark:border-slate-700 focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Categoría (para Modo Dinámico)</label>
+                                <select id="calc-category" onchange="runQuickCalculator()"
+                                    class="w-full px-4 py-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold outline-none border border-slate-300 dark:border-slate-700">
+                                    <option value="General">General / Repuestos (40%)</option>
+                                    <option value="Alta Rotación">Alta Rotación / Lubricantes (30%)</option>
+                                    <option value="Importados">Importados / Especiales (50%)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Desglose Paso a Paso -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                                <div class="text-xs text-slate-400">1. Costo Ajustado BCV</div>
+                                <div id="calc-res-adj" class="text-xl font-bold font-mono mt-1">$11.56</div>
+                                <div class="text-[11px] text-slate-500 mt-1">(Costo × Binance) ÷ BCV</div>
+                            </div>
+
+                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                                <div class="text-xs text-slate-400">2. Precio Base sin IVA</div>
+                                <div id="calc-res-base" class="text-xl font-bold font-mono text-blue-500 mt-1">$19.26</div>
+                                <div class="text-[11px] text-slate-500 mt-1">Ganancia neta: <span id="calc-res-profit" class="text-emerald-500 font-mono font-bold">$7.70</span></div>
+                            </div>
+
+                            <div class="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30">
+                                <div class="text-xs font-bold text-emerald-600 dark:text-emerald-400">3. VENTA CONTADO (+16% IVA)</div>
+                                <div id="calc-res-contado-usd" class="text-2xl font-black font-mono text-emerald-500 mt-1">$22.34</div>
+                                <div id="calc-res-contado-bs" class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 mt-1">Bs. 1.005,39</div>
+                            </div>
+
+                            <!-- TARJETA AMARILLA CASHEA -->
+                            <div class="p-4 rounded-2xl bg-cashea text-slate-950 cashea-glow shadow-lg">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-black uppercase tracking-wider">4. PRECIO CASHEA</span>
+                                    <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-950 text-cashea rounded">+10%</span>
+                                </div>
+                                <div id="calc-res-cashea-usd" class="text-2xl font-black font-mono mt-1">$24.58</div>
+                                <div id="calc-res-cashea-bs" class="text-xs font-mono font-extrabold text-slate-800 mt-1">Bs. 1.105,93</div>
+                            </div>
+                        </div>
+
+                        <!-- COMPARATIVA VISUAL EN VIVO: MARGEN BRUTO REAL VS MARKUP LINEAL -->
+                        <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800/80 dark:to-slate-900 border border-slate-200 dark:border-slate-700">
+                            <div class="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 mb-3">
+                                <i data-lucide="scale" class="w-4 h-4 text-amber-500"></i>
+                                <span>Comparativa Financiera en Vivo: ¿Por qué importa el método de margen?</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-white dark:bg-slate-950 border border-emerald-500/30">
+                                    <div class="font-bold text-emerald-500">Margen Bruto Real (Costo ÷ 0.60)</div>
+                                    <div class="mt-1 flex justify-between"><span>Contado:</span> <strong id="comp-gross-contado" class="font-mono">$22.34 (Bs. 1.005,39)</strong></div>
+                                    <div class="flex justify-between text-amber-500"><span>Cashea:</span> <strong id="comp-gross-cashea" class="font-mono">$24.58</strong></div>
+                                    <div class="text-[10px] text-slate-400 mt-1">Utilidad real sobre venta: <strong id="comp-gross-profit" class="text-emerald-400">$7.70</strong></div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-white dark:bg-slate-950 border border-blue-500/30">
+                                    <div class="font-bold text-blue-500">Markup Lineal (Costo × 1.40)</div>
+                                    <div class="mt-1 flex justify-between"><span>Contado:</span> <strong id="comp-markup-contado" class="font-mono">$18.77 (Bs. 844,53)</strong></div>
+                                    <div class="flex justify-between text-amber-500"><span>Cashea:</span> <strong id="comp-markup-cashea" class="font-mono">$20.64</strong></div>
+                                    <div class="text-[10px] text-slate-400 mt-1">Utilidad real sobre venta: <strong id="comp-markup-profit" class="text-blue-400">$4.62</strong></div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col justify-center">
+                                    <div class="text-[11px] font-bold text-amber-600 dark:text-cashea">Diferencia Protegida por Unidad</div>
+                                    <div id="comp-diff-usd" class="text-lg font-black font-mono text-amber-500 mt-0.5">+$3.57 USD</div>
+                                    <div id="comp-diff-bs" class="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">+Bs. 160,86 por venta</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-1">
+                            <button onclick="sendCalcToNewProduct()" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold flex items-center gap-2 transition-all">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                <span>Guardar este cálculo como Producto en Inventario</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- =========================================================
+                     MÓDULO 4: SINCRONIZACIÓN EN TIEMPO REAL GOOGLE SHEETS
+                ========================================================= -->
+                <section id="tab-cloud" class="tab-content hidden max-w-5xl mx-auto space-y-6">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+                                    <i data-lucide="sheet" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-bold">Google Sheets Sync en Tiempo Real</h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Cada cambio en inventario, tasas o ventas escribe filas automáticamente en tu hoja de cálculo.</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end gap-1">
+                                <span id="sheets-connection-pill" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                                    Modo Local / Cola Pendiente
+                                </span>
+                                <span id="sheets-last-sync-time" class="text-[11px] text-slate-400 font-mono">Última sinc: Aún no conectado</span>
+                            </div>
+                        </div>
+
+                        <!-- Dos Modos de Conexión a Google Sheets -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- OPCIÓN A: Google Apps Script Webhook (1 Clic, Cero OAuth) -->
+                            <div class="p-5 rounded-2xl bg-emerald-500/5 border border-emerald-500/25 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-extrabold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
+                                        <i data-lucide="zap" class="w-4 h-4"></i> Opción A: Webhook Apps Script (Recomendado)
+                                    </span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500 text-slate-950">SIN OAUTH</span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Crea una Google Sheet, ve a <strong>Extensiones → Apps Script</strong>, pega el script y publícalo como <em>Aplicación Web (Cualquier persona)</em>. Pega la URL aquí:
+                                </p>
+                                <input type="url" id="sheets-webhook-url" placeholder="https://script.google.com/macros/s/.../exec"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 text-xs font-mono outline-none border border-slate-300 dark:border-slate-700 focus:border-emerald-500">
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    <button onclick="saveSheetsWebhook()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5">
+                                        <i data-lucide="link" class="w-3.5 h-3.5"></i> Conectar Webhook
+                                    </button>
+                                    <button onclick="copyAppsScriptCode()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700">
+                                        <i data-lucide="copy" class="w-3.5 h-3.5 text-amber-400"></i> Copiar Código Apps Script
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- OPCIÓN B: Google Sheets API v4 Directa (Client ID + Spreadsheet ID) -->
+                            <div class="p-5 rounded-2xl bg-blue-500/5 border border-blue-500/20 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-extrabold uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                                        <i data-lucide="key-round" class="w-4 h-4"></i> Opción B: Google Sheets API v4 (OAuth)
+                                    </span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">DIRECTO</span>
+                                </div>
+                                <div class="space-y-2">
+                                    <input type="text" id="google-client-id" placeholder="Google OAuth Client ID (xxx.apps.googleusercontent.com)"
+                                        class="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-950 text-xs font-mono outline-none border border-slate-300 dark:border-slate-700 focus:border-blue-500">
+                                    <input type="text" id="google-spreadsheet-id" placeholder="ID de la Hoja de Cálculo (Spreadsheet ID de la URL)"
+                                        class="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-950 text-xs font-mono outline-none border border-slate-300 dark:border-slate-700 focus:border-blue-500">
+                                </div>
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    <button onclick="connectGoogleSheetsAPI()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5">
+                                        <i data-lucide="log-in" class="w-3.5 h-3.5"></i> Iniciar Sesión y Vincular Hoja
+                                    </button>
+                                    <button onclick="syncNowToSheets()" class="px-3.5 py-2 rounded-xl bg-emerald-600/20 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-bold flex items-center gap-1.5">
+                                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sincronizar Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Exportación Directa Compatible Google Sheets / Excel -->
+                        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wider text-slate-400">Exportación & Respaldo Portátil</div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Descarga hojas listas para importar en Google Sheets o restaura copias locales.</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="exportCSV()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5">
+                                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Descargar CSV (Sheets/Excel)
+                                </button>
+                                <button onclick="exportJSON()" class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold flex items-center gap-1.5">
+                                    <i data-lucide="download" class="w-4 h-4"></i> Backup JSON
+                                </button>
+                                <label class="px-3.5 py-2 rounded-xl border border-slate-400 dark:border-slate-600 hover:border-blue-500 text-xs font-medium cursor-pointer flex items-center gap-1.5">
+                                    <i data-lucide="upload" class="w-4 h-4 text-blue-500"></i> Restaurar JSON
+                                    <input type="file" accept=".json" onchange="importJSON(event)" class="hidden">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Log de Actividad de Sincronización -->
+                        <div>
+                            <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Monitor de Escritura en Tiempo Real (Inventario, Ventas_POS, Historial_Tasas)</div>
+                            <div id="sync-log-box" class="bg-slate-950 text-emerald-400 font-mono text-xs p-3.5 rounded-xl h-36 overflow-y-auto space-y-1 border border-slate-800">
+                                <div>[Sistema] Motor de persistencia en tiempo real listo.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODAL 1: CARGA MASIVA DE INVENTARIO CON INTELIGENCIA ARTIFICIAL
+    ===================================================================== -->
+    <div id="modal-ai-bulk" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-indigo-600/10 to-purple-600/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
+                        <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base sm:text-lg">Carga Masiva Inteligente con IA</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Pega listas desordenadas de WhatsApp, facturas o CSV; la IA extraerá y calculará todos los precios.</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-ai-bulk')" class="p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-semibold text-slate-500">Entrada de texto libre o archivo de proveedor:</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="fillAIExample()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium text-indigo-500">
+                            Cargar texto de ejemplo
+                        </button>
+                        <label class="text-xs px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium cursor-pointer flex items-center gap-1.5">
+                            <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Subir .TXT / .CSV
+                            <input type="file" accept=".txt,.csv" onchange="loadTextFileToAI(event)" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <textarea id="ai-raw-input" rows="4" placeholder="Ejemplo:&#10;- 15 Filtros de aceite Toyota Corolla costo 4.50$&#10;- Aceite 15w40 semisintético 24 litros a 16 usd c/u categoría lubricantes&#10;- Batería 700amp 6 unidades en $62"
+                    class="w-full p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-sm font-mono outline-none focus:border-indigo-500"></textarea>
+
+                <div class="flex justify-end">
+                    <button onclick="processBulkWithAI()" id="btn-run-ai" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25">
+                        <i data-lucide="wand-2" class="w-4 h-4"></i>
+                        <span>Interpretar y Calcular Precios con IA</span>
+                    </button>
+                </div>
+
+                <!-- Estado Cargando IA -->
+                <div id="ai-loading" class="hidden py-8 text-center space-y-2">
+                    <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p class="text-xs font-semibold text-indigo-400">Analizando estructura, extrayendo costos y calculando precios BCV/Cashea...</p>
+                </div>
+
+                <!-- Vista Previa Editable de Resultados IA -->
+                <div id="ai-preview-container" class="hidden space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-500" id="ai-parsed-count">0 productos detectados</span>
+                        <span class="text-[11px] text-slate-400">Puedes editar cualquier celda antes de importar</span>
+                    </div>
+                    <div class="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-100 dark:bg-slate-800 uppercase font-bold text-slate-500">
+                                <tr>
+                                    <th class="p-2.5">SKU</th>
+                                    <th class="p-2.5">Producto</th>
+                                    <th class="p-2.5">Categoría</th>
+                                    <th class="p-2.5 text-center">Stock</th>
+                                    <th class="p-2.5 text-right">Costo ($)</th>
+                                    <th class="p-2.5 text-right text-emerald-500">Contado</th>
+                                    <th class="p-2.5 text-right bg-cashea/20 text-amber-700 dark:text-cashea">Cashea</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ai-preview-tbody" class="divide-y divide-slate-200 dark:divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-900/50">
+                <button onclick="closeModal('modal-ai-bulk')" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800">Cancelar</button>
+                <button onclick="confirmAIBulkImport()" id="btn-confirm-ai-import" disabled class="px-5 py-2 rounded-xl bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="database-backup" class="w-4 h-4"></i>
+                    <span>Importar al Inventario en Tiempo Real</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODAL 3: CONFIGURACIÓN GLOBAL DE PORCENTAJES Y ESTRATEGIA DE MARGEN
+    ===================================================================== -->
+    <div id="modal-settings" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 class="font-bold text-base">Configuración Financiera y Método de Margen</h3>
+                <button onclick="closeModal('modal-settings')" class="p-1 rounded-lg hover:bg-slate-800"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-emerald-500 mb-1">Método de Aplicación de Ganancia Bruta</label>
+                    <select id="set-margin-strategy" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold border border-slate-300 dark:border-slate-700 outline-none">
+                        <option value="GROSS_MARGIN">1. Margen Bruto Real sobre Venta: Costo ÷ (1 - %M) [Ej: ÷ 0.60]</option>
+                        <option value="MARKUP">2. Markup Directo sobre Costo: Costo × (1 + %M) [Ej: × 1.40]</option>
+                        <option value="CASHEA_PROTECTED">3. Margen Protegido contra Cashea: Costo ÷ (1 - %M - %Cashea)</option>
+                        <option value="CATEGORY_DYNAMIC">4. Margen Dinámico por Categoría (30% Rotación / 40% Gral / 50% Imp.)</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Ganancia (%)</label>
+                        <input type="number" id="set-margin" value="40" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">IVA (%)</label>
+                        <input type="number" id="set-iva" value="16" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Cashea (%)</label>
+                        <input type="number" id="set-cashea" value="10" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="saveGlobalSettings()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">Guardar y Recalcular Todo el Inventario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODAL 2: AGREGAR / EDITAR PRODUCTO INDIVIDUAL
+    ===================================================================== -->
+    <div id="modal-product" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h3 id="product-modal-title" class="font-bold text-lg">Nuevo Producto</h3>
+                <button onclick="closeModal('modal-product')" class="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="product-form" onsubmit="saveProductForm(event)" class="p-6 space-y-4">
+                <input type="hidden" id="prod-id">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Código / SKU</label>
+                        <input type="text" id="prod-sku" required placeholder="Ej: PRD-001"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-mono outline-none border border-transparent focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Categoría</label>
+                        <input type="text" id="prod-category" required placeholder="Ej: Electrónica, Repuestos..."
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none border border-transparent focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Nombre / Descripción del Producto</label>
+                    <input type="text" id="prod-name" required placeholder="Ej: Batería 12V 800AMP Libre Mantenimiento"
+                        class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm outline-none border border-transparent focus:border-blue-500">
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Stock Inicial</label>
+                        <input type="number" id="prod-stock" required min="0" value="10"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-mono font-bold outline-none border border-transparent focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Costo Base ($)</label>
+                        <input type="number" step="0.01" id="prod-cost" required min="0.01" value="10.00" oninput="updateProductModalPreview()"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-mono font-bold outline-none border border-transparent focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Ganancia (%)</label>
+                        <input type="number" step="1" id="prod-margin" required min="0" value="40" oninput="updateProductModalPreview()"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-mono font-bold outline-none border border-transparent focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Vista previa en vivo del cálculo -->
+                <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <div class="text-[10px] text-slate-400">Ajustado BCV</div>
+                        <div id="prev-adj" class="font-mono font-bold text-sm">$11.56</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] text-emerald-500 font-bold">Contado (+IVA)</div>
+                        <div id="prev-contado" class="font-mono font-extrabold text-base text-emerald-500">$18.77</div>
+                    </div>
+                    <div class="rounded-xl bg-cashea text-slate-950 py-1">
+                        <div class="text-[10px] font-black uppercase">Precio Cashea</div>
+                        <div id="prev-cashea" class="font-mono font-black text-base">$20.64</div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModal('modal-product')" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800">Cancelar</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold">Guardar Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODAL 3: CONFIGURACIÓN GLOBAL DE PORCENTAJES
+    ===================================================================== -->
+    <div id="modal-settings" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 class="font-bold text-base">Parámetros Globales de Cálculo</h3>
+                <button onclick="closeModal('modal-settings')" class="p-1 rounded-lg hover:bg-slate-800"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Margen de Ganancia Bruta por Defecto (%)</label>
+                    <input type="number" id="set-margin" value="40" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Alícuota IVA (%)</label>
+                    <input type="number" id="set-iva" value="16" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">Comisión Cashea (%)</label>
+                    <input type="number" id="set-cashea" value="10" class="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="saveGlobalSettings()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm">Aplicar a Todo el Sistema</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODAL 4: TICKET / RECIBO DIGITAL DE VENTA
+    ===================================================================== -->
+    <div id="modal-receipt" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+        <div class="bg-white text-slate-900 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div id="printable-receipt" class="space-y-3 font-mono text-xs">
+                <div class="text-center border-b border-dashed border-slate-300 pb-3">
+                    <div class="font-black text-base tracking-tight">VENPOS PRO COMERCIAL</div>
+                    <div class="text-[11px] text-slate-500">Nota de Entrega / Comprobante POS</div>
+                    <div id="rec-date" class="text-[10px] text-slate-400 mt-1"></div>
+                    <div id="rec-id" class="text-[11px] font-bold mt-0.5"></div>
+                </div>
+
+                <div class="flex justify-between text-[11px] bg-slate-100 p-2 rounded-lg">
+                    <span>Tasa BCV: <strong id="rec-bcv"></strong></span>
+                    <span>Modalidad: <strong id="rec-mode"></strong></span>
+                </div>
+
+                <div id="rec-items" class="divide-y divide-dashed divide-slate-200 max-h-48 overflow-y-auto"></div>
+
+                <div class="border-t border-dashed border-slate-300 pt-2 space-y-1">
+                    <div class="flex justify-between"><span>Base Imponible:</span><span id="rec-sub"></span></div>
+                    <div class="flex justify-between"><span>IVA (16%):</span><span id="rec-iva"></span></div>
+                    <div id="rec-cashea-line" class="flex justify-between font-bold text-amber-700"><span>Comisión Cashea (10%):</span><span id="rec-cashea"></span></div>
+                    <div class="flex justify-between text-sm font-black pt-1 border-t border-slate-300">
+                        <span>TOTAL USD (BCV):</span><span id="rec-total-usd"></span>
+                    </div>
+                    <div class="flex justify-between text-sm font-black">
+                        <span>TOTAL BOLÍVARES:</span><span id="rec-total-bs"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button onclick="window.print()" class="flex-1 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Imprimir Ticket
+                </button>
+                <button onclick="closeModal('modal-receipt')" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
+                    Nueva Venta
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTENEDOR NOTIFICACIONES TOAST -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- =====================================================================
+         LÓGICA DE APLICACIÓN (JAVASCRIPT)
+    ===================================================================== -->
+    <script>
+        // ==========================================
+        // 1. ESTADO GLOBAL Y CONFIGURACIÓN
+        // ==========================================
+        const STORAGE_KEY = 'venpos_pro_state_v2';
+
+        let appState = {
+            rateBCV: 45.00,
+            rateBinance: 52.00,
+            defaultMargin: 40, // 40% ganancia bruta
+            marginStrategy: 'GROSS_MARGIN', // 'GROSS_MARGIN' | 'MARKUP' | 'CASHEA_PROTECTED' | 'CATEGORY_DYNAMIC'
+            ivaRate: 16,       // 16% IVA
+            casheaRate: 10,    // 10% comisión Cashea
+            sheetsWebhookUrl: '',
+            googleClientId: '',
+            googleSpreadsheetId: '',
+            inventory: [
+                { id: '1', sku: 'BAT-800', name: 'Batería 12V 800AMP Libre Mantenimiento', category: 'Automotriz', stock: 12, cost: 68.00, margin: 40 },
+                { id: '2', sku: 'ACE-20W50', name: 'Aceite Mineral 20W50 Galón 4L', category: 'Lubricantes', stock: 28, cost: 18.50, margin: 40 },
+                { id: '3', sku: 'CAU-18565', name: 'Caucho 185/65 R14 Radial Touring', category: 'Cauchos', stock: 8, cost: 45.00, margin: 40 },
+                { id: '4', sku: 'FIL-PH3593', name: 'Filtro de Aceite Universal Rosca 20mm', category: 'Filtros', stock: 45, cost: 4.20, margin: 40 },
+                { id: '5', sku: 'LED-H4', name: 'Kit Bombillos LED H4 Alta Potencia 12000LM', category: 'Iluminación', stock: 4, cost: 14.00, margin: 40 },
+                { id: '6', sku: 'PAS-FRN01', name: 'Juego Pastillas de Freno Delanteras Cerámica', category: 'Frenos', stock: 16, cost: 16.50, margin: 40 }
+            ],
+            sales: [],
+            cart: [],
+            paymentMode: 'CONTADO' // 'CONTADO' | 'CASHEA'
+        };
+
+        let aiParsedPreview = [];
+        let googleAccessToken = null;
+        let syncTimeout = null;
+        let pendingQueueCount = 0;
+
+        // ==========================================
+        // 2. MOTOR MATEMÁTICO DE PRECIOS Y ESTRATEGIAS DE MARGEN
+        // ==========================================
+        function getDynamicMarginByCategory(category, fallbackMargin) {
+            const cat = (category || '').toLowerCase();
+            if (cat.includes('rotación') || cat.includes('rotacion') || cat.includes('lubricante') || cat.includes('filtro')) return 30;
+            if (cat.includes('importado') || cat.includes('especial') || cat.includes('iluminación') || cat.includes('iluminacion')) return 50;
+            return fallbackMargin;
+        }
+
+        function calculatePrices(costBase, customMargin = null, category = '', forceStrategy = null) {
+            const bcv = Math.max(0.01, parseFloat(appState.rateBCV) || 45);
+            const binance = Math.max(0.01, parseFloat(appState.rateBinance) || 52);
+            const strategy = forceStrategy || appState.marginStrategy || 'GROSS_MARGIN';
+
+            let marginPct = customMargin !== null ? parseFloat(customMargin) : parseFloat(appState.defaultMargin);
+            if (strategy === 'CATEGORY_DYNAMIC') {
+                marginPct = getDynamicMarginByCategory(category, marginPct);
+            }
+
+            const ivaPct = parseFloat(appState.ivaRate) / 100;
+            const casheaPct = parseFloat(appState.casheaRate) / 100;
+
+            // 1. Costo multiplicado por tasa Binance y dividido entre tasa BCV
+            const adjustedCostBCV = (costBase * binance) / bcv;
+
+            // 2. Aplicación de Estrategia de Ganancia Bruta
+            let basePriceNoIVA = adjustedCostBCV;
+            const mDec = Math.min(0.95, Math.max(0, marginPct / 100));
+
+            if (strategy === 'GROSS_MARGIN' || strategy === 'CATEGORY_DYNAMIC') {
+                // Margen Bruto Real sobre venta: Costo / (1 - %Margen)
+                basePriceNoIVA = adjustedCostBCV / (1 - mDec);
+            } else if (strategy === 'CASHEA_PROTECTED') {
+                // Margen protegido contra comisión Cashea: Costo / (1 - %Margen - %Cashea)
+                const denom = Math.max(0.10, 1 - mDec - casheaPct);
+                basePriceNoIVA = adjustedCostBCV / denom;
+            } else {
+                // MARKUP directo sobre costo: Costo * (1 + %Margen)
+                basePriceNoIVA = adjustedCostBCV * (1 + mDec);
+            }
+
+            // 3. IVA 16%
+            const ivaAmount = basePriceNoIVA * ivaPct;
+
+            // 4. Precio de Venta Contado ($ BCV y Bs)
+            const contadoUSD = basePriceNoIVA + ivaAmount;
+            const contadoBs = contadoUSD * bcv;
+
+            // 5. Precio con Cashea (+10% comisión sobre precio de venta)
+            const casheaFee = contadoUSD * casheaPct;
+            const casheaUSD = contadoUSD + casheaFee;
+            const casheaBs = casheaUSD * bcv;
+
+            return {
+                adjustedCostBCV,
+                basePriceNoIVA,
+                ivaAmount,
+                contadoUSD,
+                contadoBs,
+                casheaFee,
+                casheaUSD,
+                casheaBs,
+                appliedMarginPct: marginPct
+            };
+        }
+
+        function formatUSD(val) {
+            return '$' + Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatBs(val) {
+            return 'Bs. ' + Number(val || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // ==========================================
+        // 3. INICIALIZACIÓN Y PERSISTENCIA EN TIEMPO REAL (GOOGLE SHEETS)
+        // ==========================================
+        window.onload = () => {
+            loadFromLocalStorage();
+            document.getElementById('input-rate-bcv').value = appState.rateBCV.toFixed(2);
+            document.getElementById('input-rate-binance').value = appState.rateBinance.toFixed(2);
+            if (appState.sheetsWebhookUrl) document.getElementById('sheets-webhook-url').value = appState.sheetsWebhookUrl;
+            if (appState.googleClientId) document.getElementById('google-client-id').value = appState.googleClientId;
+            if (appState.googleSpreadsheetId) document.getElementById('google-spreadsheet-id').value = appState.googleSpreadsheetId;
+
+            if (appState.sheetsWebhookUrl) {
+                updateSheetsStatusUI('connected', 'Webhook Google Sheets Activo');
+            }
+            selectMarginStrategy(appState.marginStrategy, false);
+            refreshAllUI();
+            lucide.createIcons();
+        };
+
+        function loadFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    appState = { ...appState, ...parsed, cart: [] };
+                }
+            } catch (e) {
+                console.error('Error cargando localStorage:', e);
+            }
+        }
+
+        function persistRealtime(eventLabel = 'Actualización automática', extraEvent = null) {
+            try {
+                const snapshot = {
+                    rateBCV: appState.rateBCV,
+                    rateBinance: appState.rateBinance,
+                    defaultMargin: appState.defaultMargin,
+                    marginStrategy: appState.marginStrategy,
+                    ivaRate: appState.ivaRate,
+                    casheaRate: appState.casheaRate,
+                    sheetsWebhookUrl: appState.sheetsWebhookUrl,
+                    googleClientId: appState.googleClientId,
+                    googleSpreadsheetId: appState.googleSpreadsheetId,
+                    inventory: appState.inventory,
+                    sales: appState.sales,
+                    lastUpdated: new Date().toISOString()
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+                addSyncLog(`Guardado local OK → ${eventLabel}`);
+
+                // Auto-guardado en tiempo real hacia Google Sheets (Webhook o API v4)
+                if (appState.sheetsWebhookUrl || (googleAccessToken && appState.googleSpreadsheetId)) {
+                    pendingQueueCount++;
+                    updateSheetsStatusUI('syncing', 'Guardando en Google Sheets...');
+                    clearTimeout(syncTimeout);
+                    syncTimeout = setTimeout(() => {
+                        executeGoogleSheetsSync(snapshot, eventLabel, extraEvent);
+                    }, 900);
+                } else {
+                    pendingQueueCount++;
+                    updateSheetsStatusUI('local', `Modo Local / Cola pendiente (${pendingQueueCount})`);
+                }
+            } catch (e) {
+                console.error('Error guardando estado:', e);
+            }
+        }
+
+        function updateRates() {
+            const bcv = parseFloat(document.getElementById('input-rate-bcv').value);
+            const binance = parseFloat(document.getElementById('input-rate-binance').value);
+            if (bcv > 0) appState.rateBCV = bcv;
+            if (binance > 0) appState.rateBinance = binance;
+
+            refreshAllUI();
+            persistRealtime(`Tasas BCV:${appState.rateBCV} / Binance:${appState.rateBinance}`, {
+                type: 'RATE_UPDATE',
+                timestamp: new Date().toISOString(),
+                bcv: appState.rateBCV,
+                binance: appState.rateBinance
+            });
+        }
+
+        function refreshAllUI() {
+            const factor = appState.rateBinance / appState.rateBCV;
+            const spreadPct = ((factor - 1) * 100).toFixed(1);
+            document.getElementById('header-spread-factor').textContent = `${factor.toFixed(4)}x (${spreadPct >= 0 ? '+' : ''}${spreadPct}%)`;
+
+            const strategyLabels = {
+                GROSS_MARGIN: `Margen Bruto Real (÷ ${(1 - appState.defaultMargin / 100).toFixed(2)})`,
+                MARKUP: `Markup Lineal (× ${(1 + appState.defaultMargin / 100).toFixed(2)})`,
+                CASHEA_PROTECTED: 'Protegido Cashea',
+                CATEGORY_DYNAMIC: 'Dinámico por Categoría'
+            };
+
+            document.getElementById('badge-margin').textContent = `${appState.defaultMargin}%`;
+            document.getElementById('badge-iva').textContent = `${appState.ivaRate}%`;
+            document.getElementById('badge-cashea').textContent = `+${appState.casheaRate}%`;
+            document.getElementById('badge-margin-mode').textContent = strategyLabels[appState.marginStrategy] || 'Margen Bruto Real';
+            document.getElementById('sidebar-inv-count').textContent = appState.inventory.length;
+
+            updateKPIs();
+            populateCategoryFilters();
+            renderPOSCatalog();
+            renderCart();
+            renderInventoryTable();
+            runQuickCalculator();
+            lucide.createIcons();
+        }
+
+        function updateKPIs() {
+            const totalSKUs = appState.inventory.length;
+            const totalUnits = appState.inventory.reduce((acc, p) => acc + (parseInt(p.stock) || 0), 0);
+
+            let totalContadoUSD = 0;
+            let totalCasheaUSD = 0;
+
+            appState.inventory.forEach(item => {
+                const prices = calculatePrices(item.cost, item.margin, item.category);
+                const qty = parseInt(item.stock) || 0;
+                totalContadoUSD += prices.contadoUSD * qty;
+                totalCasheaUSD += prices.casheaUSD * qty;
+            });
+
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const todaySales = appState.sales.filter(s => s.date.startsWith(todayStr));
+            const todaySalesUSD = todaySales.reduce((acc, s) => acc + s.totalUSD, 0);
+
+            document.getElementById('kpi-total-skus').textContent = totalSKUs;
+            document.getElementById('kpi-total-units').textContent = totalUnits;
+            document.getElementById('kpi-inv-usd').textContent = formatUSD(totalContadoUSD);
+            document.getElementById('kpi-inv-bs').textContent = formatBs(totalContadoUSD * appState.rateBCV);
+            document.getElementById('kpi-inv-cashea-usd').textContent = formatUSD(totalCasheaUSD);
+            document.getElementById('kpi-inv-cashea-bs').textContent = formatBs(totalCasheaUSD * appState.rateBCV);
+            document.getElementById('kpi-sales-usd').textContent = formatUSD(todaySalesUSD);
+            document.getElementById('kpi-sales-count').textContent = todaySales.length;
+        }
+
+        // ==========================================
+        // 4. NAVEGACIÓN Y TEMA
+        // ==========================================
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = 'nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-all';
+            });
+
+            const activeBtn = document.getElementById(`nav-${tabName}`);
+            activeBtn.className = 'nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
+
+            const titles = {
+                pos: 'Punto de Venta (POS)',
+                inventory: 'Inventario Multifuncional & Precios',
+                calculator: 'Calculadora Rápida & Margen Bruto Real',
+                cloud: 'Sincronización en Tiempo Real con Google Sheets'
+            };
+            document.getElementById('page-title').textContent = titles[tabName];
+
+            document.getElementById('sidebar').classList.add('-translate-x-full');
+            lucide.createIcons();
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function populateCategoryFilters() {
+            const categories = [...new Set(appState.inventory.map(p => p.category).filter(Boolean))];
+            ['pos-category-filter', 'inv-filter-cat'].forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (!select) return;
+                const current = select.value;
+                select.innerHTML = '<option value="ALL">Todas las categorías</option>' +
+                    categories.map(c => `<option value="${c}">${c}</option>`).join('');
+                if (categories.includes(current)) select.value = current;
+            });
+        }
+
+        // ==========================================
+        // 5. MÓDULO PUNTO DE VENTA (POS)
+        // ==========================================
+        function renderPOSCatalog() {
+            const query = document.getElementById('pos-search').value.toLowerCase().trim();
+            const cat = document.getElementById('pos-category-filter').value;
+            const grid = document.getElementById('pos-catalog-grid');
+
+            const filtered = appState.inventory.filter(p => {
+                const matchText = p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query) || p.category.toLowerCase().includes(query);
+                const matchCat = cat === 'ALL' || p.category === cat;
+                return matchText && matchCat;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 text-sm">No se encontraron productos con ese filtro.</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => {
+                const prices = calculatePrices(p.cost, p.margin, p.category);
+                const outOfStock = p.stock <= 0;
+                return `
+                    <div onclick="${outOfStock ? '' : `addToCart('${p.id}')`}"
+                        class="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 rounded-2xl p-3.5 flex flex-col justify-between transition-all ${outOfStock ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-md active:scale-[0.98]'}">
+                        <div>
+                            <div class="flex items-center justify-between gap-1 mb-1.5">
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">${p.sku}</span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock <= 5 ? 'bg-rose-500/15 text-rose-500' : 'bg-emerald-500/10 text-emerald-500'}">
+                                    Stock: ${p.stock}
+                                </span>
+                            </div>
+                            <h3 class="font-bold text-xs sm:text-sm line-clamp-2 group-hover:text-emerald-500 transition-colors">${p.name}</h3>
+                            <span class="text-[11px] text-slate-400">${p.category}</span>
+                        </div>
+
+                        <div class="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                            <!-- Precio Contado -->
+                            <div class="flex items-baseline justify-between">
+                                <span class="text-[10px] font-semibold text-slate-400">Contado:</span>
+                                <div class="text-right">
+                                    <span class="font-mono font-extrabold text-sm text-emerald-500">${formatUSD(prices.contadoUSD)}</span>
+                                    <div class="text-[10px] font-mono text-slate-400">${formatBs(prices.contadoBs)}</div>
+                                </div>
+                            </div>
+
+                            <!-- Precio Cashea Resaltado en Amarillo -->
+                            <div class="flex items-center justify-between px-2 py-1 rounded-lg bg-cashea text-slate-950">
+                                <span class="text-[10px] font-black uppercase">Cashea:</span>
+                                <div class="text-right leading-tight">
+                                    <span class="font-mono font-black text-xs">${formatUSD(prices.casheaUSD)}</span>
+                                    <div class="text-[9px] font-mono font-bold">${formatBs(prices.casheaBs)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setPaymentMode(mode) {
+            appState.paymentMode = mode;
+            const btnContado = document.getElementById('btn-mode-contado');
+            const btnCashea = document.getElementById('btn-mode-cashea');
+
+            if (mode === 'CONTADO') {
+                btnContado.className = 'p-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-left transition-all';
+                btnCashea.className = 'p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 hover:border-cashea bg-slate-50 dark:bg-slate-800/50 text-left transition-all';
+            } else {
+                btnContado.className = 'p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 hover:border-emerald-500 bg-slate-50 dark:bg-slate-800/50 text-left transition-all';
+                btnCashea.className = 'p-3 rounded-xl border-2 border-cashea bg-cashea text-slate-950 text-left transition-all cashea-glow';
+            }
+            renderCart();
+        }
+
+        function addToCart(productId) {
+            const product = appState.inventory.find(p => p.id === productId);
+            if (!product || product.stock <= 0) return;
+
+            const existing = appState.cart.find(c => c.id === productId);
+            if (existing) {
+                if (existing.qty >= product.stock) {
+                    showToast('Stock máximo alcanzado para este producto', 'warning');
+                    return;
+                }
+                existing.qty++;
+            } else {
+                appState.cart.push({ id: product.id, qty: 1 });
+            }
+            renderCart();
+        }
+
+        function updateCartQty(productId, delta) {
+            const idx = appState.cart.findIndex(c => c.id === productId);
+            if (idx === -1) return;
+
+            const product = appState.inventory.find(p => p.id === productId);
+            const newQty = appState.cart[idx].qty + delta;
+
+            if (newQty <= 0) {
+                appState.cart.splice(idx, 1);
+            } else if (product && newQty <= product.stock) {
+                appState.cart[idx].qty = newQty;
+            } else {
+                showToast('No hay suficiente stock disponible', 'warning');
+            }
+            renderCart();
+        }
+
+        function clearCart() {
+            appState.cart = [];
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('pos-cart-items');
+            if (appState.cart.length === 0) {
+                container.innerHTML = `
+                    <div class="py-10 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                        <i data-lucide="shopping-bag" class="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2"></i>
+                        <p class="text-xs text-slate-400">Selecciona productos del catálogo para facturar</p>
+                    </div>
+                `;
+                updateCartTotals(0, 0, 0);
+                lucide.createIcons();
+                return;
+            }
+
+            let sumBase = 0;
+            let sumIVA = 0;
+            let sumCasheaFee = 0;
+
+            container.innerHTML = appState.cart.map(item => {
+                const prod = appState.inventory.find(p => p.id === item.id);
+                if (!prod) return '';
+                const prices = calculatePrices(prod.cost, prod.margin, prod.category);
+
+                sumBase += prices.basePriceNoIVA * item.qty;
+                sumIVA += prices.ivaAmount * item.qty;
+                sumCasheaFee += prices.casheaFee * item.qty;
+
+                const unitDisplayUSD = appState.paymentMode === 'CASHEA' ? prices.casheaUSD : prices.contadoUSD;
+
+                return `
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-800">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-bold truncate">${prod.name}</div>
+                            <div class="text-[11px] font-mono text-slate-400">${formatUSD(unitDisplayUSD)} c/u</div>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="updateCartQty('${prod.id}', -1)" class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-700 font-bold text-xs hover:bg-rose-500 hover:text-white">-</button>
+                            <span class="w-6 text-center font-mono text-xs font-bold">${item.qty}</span>
+                            <button onclick="updateCartQty('${prod.id}', 1)" class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-700 font-bold text-xs hover:bg-emerald-500 hover:text-white">+</button>
+                        </div>
+                        <div class="text-right font-mono font-bold text-xs w-16">
+                            ${formatUSD(unitDisplayUSD * item.qty)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            updateCartTotals(sumBase, sumIVA, sumCasheaFee);
+            lucide.createIcons();
+        }
+
+        function updateCartTotals(base, iva, casheaFee) {
+            const isCashea = appState.paymentMode === 'CASHEA';
+            const totalUSD = base + iva + (isCashea ? casheaFee : 0);
+            const totalBs = totalUSD * appState.rateBCV;
+
+            document.getElementById('cart-subtotal').textContent = formatUSD(base);
+            document.getElementById('cart-iva-pct').textContent = appState.ivaRate;
+            document.getElementById('cart-iva').textContent = formatUSD(iva);
+            document.getElementById('cart-cashea-pct').textContent = appState.casheaRate;
+            document.getElementById('cart-cashea-fee').textContent = formatUSD(casheaFee);
+
+            const casheaRow = document.getElementById('cart-cashea-row');
+            const totalBox = document.getElementById('cart-total-box');
+            const totalUsdEl = document.getElementById('cart-total-usd');
+            const totalBsEl = document.getElementById('cart-total-bs');
+            const installmentsEl = document.getElementById('cart-cashea-installments');
+
+            if (isCashea) {
+                casheaRow.classList.remove('hidden');
+                casheaRow.classList.add('flex');
+                totalBox.className = 'p-3.5 rounded-xl bg-cashea text-slate-950 mt-2 cashea-glow transition-colors';
+                totalUsdEl.className = 'text-2xl font-black font-mono text-slate-950';
+                totalBsEl.className = 'text-base font-extrabold font-mono text-slate-900';
+
+                installmentsEl.classList.remove('hidden');
+                const downpayment = totalUSD * 0.60;
+                const quota = (totalUSD * 0.40) / 3;
+                document.getElementById('cashea-downpayment').textContent = formatUSD(downpayment);
+                document.getElementById('cashea-quota').textContent = formatUSD(quota);
+            } else {
+                casheaRow.classList.add('hidden');
+                casheaRow.classList.remove('flex');
+                totalBox.className = 'p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 mt-2 transition-colors';
+                totalUsdEl.className = 'text-2xl font-black font-mono text-emerald-500';
+                totalBsEl.className = 'text-base font-bold font-mono text-slate-800 dark:text-slate-200';
+                installmentsEl.classList.add('hidden');
+            }
+
+            totalUsdEl.textContent = formatUSD(totalUSD);
+            totalBsEl.textContent = formatBs(totalBs);
+        }
+
+        function processSale() {
+            if (appState.cart.length === 0) {
+                showToast('El carrito está vacío', 'warning');
+                return;
+            }
+
+            let sumBase = 0, sumIVA = 0, sumCashea = 0;
+            const receiptItems = [];
+
+            appState.cart.forEach(item => {
+                const prod = appState.inventory.find(p => p.id === item.id);
+                if (prod) {
+                    const prices = calculatePrices(prod.cost, prod.margin, prod.category);
+                    prod.stock = Math.max(0, prod.stock - item.qty);
+
+                    sumBase += prices.basePriceNoIVA * item.qty;
+                    sumIVA += prices.ivaAmount * item.qty;
+                    sumCashea += prices.casheaFee * item.qty;
+
+                    const unitPrice = appState.paymentMode === 'CASHEA' ? prices.casheaUSD : prices.contadoUSD;
+                    receiptItems.push({
+                        name: prod.name,
+                        qty: item.qty,
+                        unitUSD: unitPrice,
+                        totalUSD: unitPrice * item.qty
+                    });
+                }
+            });
+
+            const isCashea = appState.paymentMode === 'CASHEA';
+            const totalUSD = sumBase + sumIVA + (isCashea ? sumCashea : 0);
+            const totalBs = totalUSD * appState.rateBCV;
+
+            const saleRecord = {
+                id: 'FAC-' + Date.now().toString().slice(-6),
+                date: new Date().toISOString(),
+                mode: appState.paymentMode,
+                rateBCV: appState.rateBCV,
+                rateBinance: appState.rateBinance,
+                baseUSD: sumBase,
+                ivaUSD: sumIVA,
+                casheaUSD: isCashea ? sumCashea : 0,
+                totalUSD,
+                totalBs,
+                items: receiptItems
+            };
+
+            appState.sales.unshift(saleRecord);
+            appState.cart = [];
+
+            refreshAllUI();
+            persistRealtime(`Venta ${saleRecord.id} procesada`, { type: 'SALE', sale: saleRecord });
+            showReceiptModal(saleRecord);
+            showToast(`Venta ${saleRecord.id} registrada con éxito`, 'success');
+        }
+
+        function showReceiptModal(sale) {
+            document.getElementById('rec-date').textContent = new Date(sale.date).toLocaleString('es-VE');
+            document.getElementById('rec-id').textContent = `Comprobante: ${sale.id}`;
+            document.getElementById('rec-bcv').textContent = `Bs. ${sale.rateBCV.toFixed(2)}`;
+            document.getElementById('rec-mode').textContent = sale.mode;
+
+            document.getElementById('rec-items').innerHTML = sale.items.map(i => `
+                <div class="py-1.5 flex justify-between">
+                    <span>${i.qty}x ${i.name}</span>
+                    <span class="font-bold">${formatUSD(i.totalUSD)}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('rec-sub').textContent = formatUSD(sale.baseUSD);
+            document.getElementById('rec-iva').textContent = formatUSD(sale.ivaUSD);
+
+            const casheaLine = document.getElementById('rec-cashea-line');
+            if (sale.mode === 'CASHEA') {
+                casheaLine.classList.remove('hidden');
+                document.getElementById('rec-cashea').textContent = formatUSD(sale.casheaUSD);
+            } else {
+                casheaLine.classList.add('hidden');
+            }
+
+            document.getElementById('rec-total-usd').textContent = formatUSD(sale.totalUSD);
+            document.getElementById('rec-total-bs').textContent = formatBs(sale.totalBs);
+
+            openModal('modal-receipt');
+        }
+
+        // ==========================================
+        // 6. MÓDULO INVENTARIO & CRUD
+        // ==========================================
+        function renderInventoryTable() {
+            const query = document.getElementById('inv-search').value.toLowerCase().trim();
+            const cat = document.getElementById('inv-filter-cat').value;
+            const stockFilter = document.getElementById('inv-filter-stock').value;
+            const tbody = document.getElementById('inventory-table-body');
+
+            const filtered = appState.inventory.filter(p => {
+                const matchQuery = p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query) || p.category.toLowerCase().includes(query);
+                const matchCat = cat === 'ALL' || p.category === cat;
+                let matchStock = true;
+                if (stockFilter === 'LOW') matchStock = p.stock > 0 && p.stock <= 5;
+                if (stockFilter === 'OUT') matchStock = p.stock <= 0;
+                return matchQuery && matchCat && matchStock;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-slate-400">No hay productos que coincidan con la búsqueda.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(p => {
+                const prices = calculatePrices(p.cost, p.margin, p.category);
+                return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">${p.sku}</span>
+                                <span class="text-[11px] text-blue-500 font-medium">${p.category}</span>
+                            </div>
+                            <div class="font-semibold text-slate-900 dark:text-slate-100 mt-0.5">${p.name}</div>
+                        </td>
+                        <td class="py-3 px-3 text-center">
+                            <span class="px-2.5 py-1 rounded-full font-mono text-xs font-bold ${p.stock === 0 ? 'bg-rose-500/20 text-rose-500' : p.stock <= 5 ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'}">
+                                ${p.stock}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-right font-mono text-slate-500">${formatUSD(p.cost)}</td>
+                        <td class="py-3 px-3 text-right font-mono text-slate-600 dark:text-slate-300">${formatUSD(prices.adjustedCostBCV)}</td>
+                        <td class="py-3 px-3 text-right font-mono text-blue-500 font-semibold">${formatUSD(prices.basePriceNoIVA)}</td>
+                        <td class="py-3 px-3 text-right">
+                            <div class="font-mono font-extrabold text-emerald-500">${formatUSD(prices.contadoUSD)}</div>
+                            <div class="font-mono text-[11px] text-slate-400">${formatBs(prices.contadoBs)}</div>
+                        </td>
+                        <td class="py-3 px-4 text-right bg-cashea/15">
+                            <div class="inline-block px-2.5 py-1 rounded-xl bg-cashea text-slate-950 font-mono font-black text-sm shadow-sm">
+                                ${formatUSD(prices.casheaUSD)}
+                            </div>
+                            <div class="font-mono text-[11px] font-bold text-amber-700 dark:text-cashea mt-0.5">${formatBs(prices.casheaBs)}</div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="editProduct('${p.id}')" title="Editar" class="p-1.5 rounded-lg hover:bg-blue-500/15 text-blue-500">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteProduct('${p.id}')" title="Eliminar" class="p-1.5 rounded-lg hover:bg-rose-500/15 text-rose-500">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function openProductModal(prefillCost = null, prefillMargin = null) {
+            document.getElementById('product-form').reset();
+            document.getElementById('prod-id').value = '';
+            document.getElementById('product-modal-title').textContent = 'Agregar Nuevo Producto';
+            document.getElementById('prod-sku').value = 'PRD-' + Math.floor(100 + Math.random() * 900);
+            document.getElementById('prod-cost').value = prefillCost !== null ? prefillCost : '10.00';
+            document.getElementById('prod-margin').value = prefillMargin !== null ? prefillMargin : appState.defaultMargin;
+            updateProductModalPreview();
+            openModal('modal-product');
+        }
+
+        function editProduct(id) {
+            const prod = appState.inventory.find(p => p.id === id);
+            if (!prod) return;
+            document.getElementById('prod-id').value = prod.id;
+            document.getElementById('product-modal-title').textContent = 'Editar Producto';
+            document.getElementById('prod-sku').value = prod.sku;
+            document.getElementById('prod-category').value = prod.category;
+            document.getElementById('prod-name').value = prod.name;
+            document.getElementById('prod-stock').value = prod.stock;
+            document.getElementById('prod-cost').value = prod.cost;
+            document.getElementById('prod-margin').value = prod.margin ?? appState.defaultMargin;
+            updateProductModalPreview();
+            openModal('modal-product');
+        }
+
+        function updateProductModalPreview() {
+            const cost = parseFloat(document.getElementById('prod-cost').value) || 0;
+            const margin = parseFloat(document.getElementById('prod-margin').value) || 0;
+            const category = document.getElementById('prod-category').value || '';
+            const p = calculatePrices(cost, margin, category);
+            document.getElementById('prev-adj').textContent = formatUSD(p.adjustedCostBCV);
+            document.getElementById('prev-contado').textContent = formatUSD(p.contadoUSD);
+            document.getElementById('prev-cashea').textContent = formatUSD(p.casheaUSD);
+        }
+
+        function saveProductForm(e) {
+            e.preventDefault();
+            const id = document.getElementById('prod-id').value;
+            const productData = {
+                id: id || Date.now().toString(),
+                sku: document.getElementById('prod-sku').value.trim().toUpperCase(),
+                category: document.getElementById('prod-category').value.trim(),
+                name: document.getElementById('prod-name').value.trim(),
+                stock: parseInt(document.getElementById('prod-stock').value) || 0,
+                cost: parseFloat(document.getElementById('prod-cost').value) || 0,
+                margin: parseFloat(document.getElementById('prod-margin').value) || appState.defaultMargin
+            };
+
+            if (id) {
+                const idx = appState.inventory.findIndex(p => p.id === id);
+                if (idx !== -1) appState.inventory[idx] = productData;
+                showToast('Producto actualizado', 'success');
+            } else {
+                appState.inventory.unshift(productData);
+                showToast('Producto agregado al inventario', 'success');
+            }
+
+            closeModal('modal-product');
+            refreshAllUI();
+            persistRealtime(`Producto ${productData.sku}`);
+        }
+
+        function deleteProduct(id) {
+            appState.inventory = appState.inventory.filter(p => p.id !== id);
+            refreshAllUI();
+            persistRealtime('Producto eliminado');
+            showToast('Producto eliminado del inventario', 'info');
+        }
+
+        // ==========================================
+        // 7. CARGA MASIVA CON INTELIGENCIA ARTIFICIAL (GEMINI API)
+        // ==========================================
+        function openAIBulkModal() {
+            aiParsedPreview = [];
+            document.getElementById('ai-preview-container').classList.add('hidden');
+            document.getElementById('btn-confirm-ai-import').disabled = true;
+            openModal('modal-ai-bulk');
+        }
+
+        function fillAIExample() {
+            document.getElementById('ai-raw-input').value = `Lista Reposición Proveedor Caracas:
+- 20 unds Bujía Iridium NGK Laser (SKU: NGK-901) costo $6.50 c/u - Encendido
+- Amortiguador delantero Corolla 2009-2014 (6 piezas) a 42$ cada uno, cat: Suspensión
+- Refrigerante Organico 50/50 Galon, llegaron 35 galones en $8.20
+- Correa de tiempo Gates 135 dientes -> 14 unidades, costo base 15.80 usd
+- Kit de Croche Completo Aveo (4 juegos) $58.00`;
+        }
+
+        function loadTextFileToAI(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('ai-raw-input').value = e.target.result;
+                showToast('Archivo cargado. Haz clic en "Interpretar con IA"', 'info');
+            };
+            reader.readAsText(file);
+        }
+
+        async function processBulkWithAI() {
+            const rawText = document.getElementById('ai-raw-input').value.trim();
+            if (!rawText) {
+                showToast('Por favor pega texto o sube un archivo primero', 'warning');
+                return;
+            }
+
+            const loader = document.getElementById('ai-loading');
+            const previewBox = document.getElementById('ai-preview-container');
+            const btnRun = document.getElementById('btn-run-ai');
+
+            loader.classList.remove('hidden');
+            previewBox.classList.add('hidden');
+            btnRun.disabled = true;
+
+            try {
+                const items = await callGeminiInventoryParser(rawText);
+                aiParsedPreview = items.map((item, index) => ({
+                    id: (Date.now() + index).toString(),
+                    sku: item.sku || `IA-${Math.floor(1000 + Math.random() * 9000)}`,
+                    name: item.name || 'Producto sin nombre',
+                    category: item.category || 'General',
+                    stock: Math.max(0, parseInt(item.stock) || 1),
+                    cost: Math.max(0.01, parseFloat(item.cost) || 1),
+                    margin: appState.defaultMargin
+                }));
+
+                renderAIPreviewTable();
+                previewBox.classList.remove('hidden');
+                document.getElementById('btn-confirm-ai-import').disabled = aiParsedPreview.length === 0;
+                showToast(`IA interpretó ${aiParsedPreview.length} productos con éxito`, 'success');
+            } catch (error) {
+                console.warn('Fallback heurístico local activado:', error);
+                aiParsedPreview = fallbackLocalParser(rawText);
+                renderAIPreviewTable();
+                previewBox.classList.remove('hidden');
+                document.getElementById('btn-confirm-ai-import').disabled = aiParsedPreview.length === 0;
+                showToast(`Interpretación inteligente completada (${aiParsedPreview.length} items)`, 'success');
+            } finally {
+                loader.classList.add('hidden');
+                btnRun.disabled = false;
+            }
+        }
+
+        async function callGeminiInventoryParser(rawText) {
+            const apiKey = ""; // Inyectado automáticamente en entorno Canvas
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const systemPrompt = `Eres un experto analista de inventarios y compras en Venezuela. Tu tarea es extraer TODOS los productos de un texto desordenado (mensajes de WhatsApp, facturas, listas CSV/Excel) y estructurarlos con máxima precisión. Si no hay SKU explícito, genera un código corto coherente (ej. REP-101). Deduce la categoría comercial apropiada en español. Extrae la cantidad (stock) y el costo base unitario en dólares ($).`;
+
+            const payload = {
+                contents: [{ parts: [{ text: `Extrae el inventario del siguiente texto:\n\n${rawText}` }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                sku: { type: "STRING" },
+                                name: { type: "STRING" },
+                                category: { type: "STRING" },
+                                stock: { type: "INTEGER" },
+                                cost: { type: "NUMBER" }
+                            },
+                            required: ["sku", "name", "category", "stock", "cost"]
+                        }
+                    }
+                }
+            };
+
+            // Backoff exponencial
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return JSON.parse(text);
+                }
+                await new Promise(r => setTimeout(r, delay));
+                delay *= 2;
+            }
+            throw new Error('No se pudo conectar con Gemini API');
+        }
+
+        // Parser inteligente local de respaldo si no hay conectividad externa
+        function fallbackLocalParser(text) {
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+            const results = [];
+            lines.forEach((line, idx) => {
+                const costMatch = line.match(/(?:\$|usd|costo|en|a)\s*(\d+(?:[.,]\d+)?)/i) || line.match(/(\d+(?:[.,]\d+)?)\s*(?:\$|usd)/i);
+                const qtyMatch = line.match(/(\d+)\s*(?:unds?|unidades|piezas|pzas|galones|cajas|juegos)/i) || line.match(/^[-*•]?\s*(\d+)\s+/);
+                const skuMatch = line.match(/(?:sku|cod|código)[:\s-]*([a-zA-Z0-9-]+)/i);
+
+                if (costMatch) {
+                    const cost = parseFloat(costMatch[1].replace(',', '.'));
+                    const stock = qtyMatch ? parseInt(qtyMatch[1]) : 10;
+                    let cleanName = line
+                        .replace(costMatch[0], '')
+                        .replace(qtyMatch ? qtyMatch[0] : '', '')
+                        .replace(skuMatch ? skuMatch[0] : '', '')
+                        .replace(/^[-*•()\s]+|[-*•()\s]+$/g, '')
+                        .trim();
+
+                    results.push({
+                        id: (Date.now() + idx).toString(),
+                        sku: skuMatch ? skuMatch[1].toUpperCase() : `IMP-${100 + idx}`,
+                        name: cleanName || `Artículo Importado #${idx + 1}`,
+                        category: 'Importación Rápida',
+                        stock,
+                        cost,
+                        margin: appState.defaultMargin
+                    });
+                }
+            });
+            return results;
+        }
+
+        function renderAIPreviewTable() {
+            const tbody = document.getElementById('ai-preview-tbody');
+            document.getElementById('ai-parsed-count').textContent = `${aiParsedPreview.length} productos interpretados`;
+
+            tbody.innerHTML = aiParsedPreview.map((item, idx) => {
+                const prices = calculatePrices(item.cost, item.margin, item.category);
+                return `
+                    <tr>
+                        <td class="p-2 font-mono font-bold">
+                            <input type="text" value="${item.sku}" onchange="aiParsedPreview[${idx}].sku = this.value" class="w-20 bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none">
+                        </td>
+                        <td class="p-2">
+                            <input type="text" value="${item.name}" onchange="aiParsedPreview[${idx}].name = this.value" class="w-full bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none">
+                        </td>
+                        <td class="p-2">
+                            <input type="text" value="${item.category}" onchange="aiParsedPreview[${idx}].category = this.value" class="w-24 bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none">
+                        </td>
+                        <td class="p-2 text-center">
+                            <input type="number" value="${item.stock}" onchange="aiParsedPreview[${idx}].stock = parseInt(this.value)||0" class="w-14 text-center font-mono bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none">
+                        </td>
+                        <td class="p-2 text-right">
+                            <input type="number" step="0.01" value="${item.cost}" onchange="aiParsedPreview[${idx}].cost = parseFloat(this.value)||0; renderAIPreviewTable()" class="w-16 text-right font-mono bg-transparent border-b border-slate-300 dark:border-slate-700 outline-none">
+                        </td>
+                        <td class="p-2 text-right font-mono font-bold text-emerald-500">${formatUSD(prices.contadoUSD)}</td>
+                        <td class="p-2 text-right font-mono font-black bg-cashea/20 text-amber-700 dark:text-cashea">${formatUSD(prices.casheaUSD)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function confirmAIBulkImport() {
+            if (aiParsedPreview.length === 0) return;
+            appState.inventory = [...aiParsedPreview, ...appState.inventory];
+            closeModal('modal-ai-bulk');
+            refreshAllUI();
+            persistRealtime(`Carga Masiva IA (+${aiParsedPreview.length} productos)`);
+            showToast(`¡${aiParsedPreview.length} productos añadidos al inventario!`, 'success');
+        }
+
+        // ==========================================
+        // 8. CALCULADORA RÁPIDA, COMPARATIVA DE MARGEN Y AJUSTES GLOBALES
+        // ==========================================
+        function selectMarginStrategy(strategy, shouldPersist = true) {
+            appState.marginStrategy = strategy;
+            document.querySelectorAll('.strat-btn').forEach(btn => {
+                btn.className = 'strat-btn p-3 rounded-xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left transition-all';
+            });
+            const active = document.getElementById(`strat-btn-${strategy}`);
+            if (active) {
+                active.className = 'strat-btn p-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/10 text-left transition-all shadow-sm';
+            }
+            if (shouldPersist) {
+                refreshAllUI();
+                persistRealtime(`Estrategia margen: ${strategy}`);
+            } else {
+                runQuickCalculator();
+            }
+        }
+
+        function runQuickCalculator() {
+            const cost = parseFloat(document.getElementById('calc-cost').value) || 0;
+            const margin = parseFloat(document.getElementById('calc-margin').value) || 0;
+            const category = document.getElementById('calc-category') ? document.getElementById('calc-category').value : 'General';
+            const factor = (appState.rateBinance / appState.rateBCV).toFixed(4);
+
+            document.getElementById('calc-formula-rates').textContent = `${appState.rateBinance.toFixed(2)} ÷ ${appState.rateBCV.toFixed(2)} = ${factor}x`;
+
+            const p = calculatePrices(cost, margin, category, appState.marginStrategy);
+            const netProfit = p.basePriceNoIVA - p.adjustedCostBCV;
+
+            document.getElementById('calc-res-adj').textContent = formatUSD(p.adjustedCostBCV);
+            document.getElementById('calc-res-base').textContent = formatUSD(p.basePriceNoIVA);
+            document.getElementById('calc-res-profit').textContent = `${formatUSD(netProfit)} (${p.appliedMarginPct}%)`;
+            document.getElementById('calc-res-contado-usd').textContent = formatUSD(p.contadoUSD);
+            document.getElementById('calc-res-contado-bs').textContent = formatBs(p.contadoBs);
+            document.getElementById('calc-res-cashea-usd').textContent = formatUSD(p.casheaUSD);
+            document.getElementById('calc-res-cashea-bs').textContent = formatBs(p.casheaBs);
+
+            // Actualizar comparativa visual Margen Bruto Real vs Markup Lineal
+            const pGross = calculatePrices(cost, margin, category, 'GROSS_MARGIN');
+            const pMarkup = calculatePrices(cost, margin, category, 'MARKUP');
+
+            const grossProfit = pGross.basePriceNoIVA - pGross.adjustedCostBCV;
+            const markupProfit = pMarkup.basePriceNoIVA - pMarkup.adjustedCostBCV;
+            const diffUSD = pGross.contadoUSD - pMarkup.contadoUSD;
+            const diffBs = pGross.contadoBs - pMarkup.contadoBs;
+
+            document.getElementById('comp-gross-contado').textContent = `${formatUSD(pGross.contadoUSD)} (${formatBs(pGross.contadoBs)})`;
+            document.getElementById('comp-gross-cashea').textContent = formatUSD(pGross.casheaUSD);
+            document.getElementById('comp-gross-profit').textContent = formatUSD(grossProfit);
+
+            document.getElementById('comp-markup-contado').textContent = `${formatUSD(pMarkup.contadoUSD)} (${formatBs(pMarkup.contadoBs)})`;
+            document.getElementById('comp-markup-cashea').textContent = formatUSD(pMarkup.casheaUSD);
+            document.getElementById('comp-markup-profit').textContent = formatUSD(markupProfit);
+
+            document.getElementById('comp-diff-usd').textContent = `${diffUSD >= 0 ? '+' : ''}${formatUSD(diffUSD)} USD`;
+            document.getElementById('comp-diff-bs').textContent = `${diffBs >= 0 ? '+' : ''}${formatBs(diffBs)} por unidad`;
+        }
+
+        function sendCalcToNewProduct() {
+            const cost = parseFloat(document.getElementById('calc-cost').value) || 10;
+            const margin = parseFloat(document.getElementById('calc-margin').value) || 40;
+            openProductModal(cost, margin);
+        }
+
+        function openSettingsModal() {
+            document.getElementById('set-margin-strategy').value = appState.marginStrategy || 'GROSS_MARGIN';
+            document.getElementById('set-margin').value = appState.defaultMargin;
+            document.getElementById('set-iva').value = appState.ivaRate;
+            document.getElementById('set-cashea').value = appState.casheaRate;
+            openModal('modal-settings');
+        }
+
+        function saveGlobalSettings() {
+            appState.marginStrategy = document.getElementById('set-margin-strategy').value;
+            appState.defaultMargin = parseFloat(document.getElementById('set-margin').value) || 40;
+            appState.ivaRate = parseFloat(document.getElementById('set-iva').value) || 16;
+            appState.casheaRate = parseFloat(document.getElementById('set-cashea').value) || 10;
+
+            appState.inventory.forEach(p => p.margin = appState.defaultMargin);
+            document.getElementById('calc-margin').value = appState.defaultMargin;
+
+            closeModal('modal-settings');
+            selectMarginStrategy(appState.marginStrategy, false);
+            refreshAllUI();
+            persistRealtime('Parámetros financieros actualizados');
+            showToast('Estrategia de margen y porcentajes aplicados', 'success');
+        }
+
+        // ==========================================
+        // 9. GOOGLE SHEETS SYNC EN TIEMPO REAL (WEBHOOK + API V4)
+        // ==========================================
+        function saveSheetsWebhook() {
+            const url = document.getElementById('sheets-webhook-url').value.trim();
+            if (!url || !url.startsWith('https://')) {
+                showToast('Ingresa una URL válida de Google Apps Script (https://script.google.com/...)', 'warning');
+                return;
+            }
+            appState.sheetsWebhookUrl = url;
+            updateSheetsStatusUI('connected', 'Webhook Google Sheets Conectado');
+            addSyncLog('Webhook de Google Sheets vinculado correctamente.');
+            persistRealtime('Conexión inicial Webhook Google Sheets');
+            showToast('¡Conectado a Google Sheets en tiempo real!', 'success');
+        }
+
+        function copyAppsScriptCode() {
+            const scriptCode = `function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var data = JSON.parse(e.postData.contents);
+  
+  // 1. Hoja Inventario
+  var invSheet = ss.getSheetByName("Inventario") || ss.insertSheet("Inventario");
+  invSheet.clear();
+  invSheet.appendRow(["SKU", "Producto", "Categoria", "Stock", "Costo_Base_USD", "Ajustado_BCV", "Precio_Contado_USD", "Precio_Contado_Bs", "Precio_Cashea_USD", "Precio_Cashea_Bs", "Actualizado"]);
+  data.inventory.forEach(function(r) {
+    invSheet.appendRow([r.sku, r.name, r.category, r.stock, r.cost, r.adjustedCostBCV, r.contadoUSD, r.contadoBs, r.casheaUSD, r.casheaBs, data.timestamp]);
+  });
+
+  // 2. Hoja Ventas_POS (si hay evento de venta)
+  if (data.extraEvent && data.extraEvent.type === "SALE") {
+    var salesSheet = ss.getSheetByName("Ventas_POS") || ss.insertSheet("Ventas_POS");
+    if (salesSheet.getLastRow() === 0) {
+      salesSheet.appendRow(["ID_Factura", "Fecha", "Modalidad", "Tasa_BCV", "Tasa_Binance", "Base_USD", "IVA_USD", "Comision_Cashea", "Total_USD", "Total_Bs"]);
+    }
+    var s = data.extraEvent.sale;
+    salesSheet.appendRow([s.id, s.date, s.mode, s.rateBCV, s.rateBinance, s.baseUSD, s.ivaUSD, s.casheaUSD, s.totalUSD, s.totalBs]);
+  }
+
+  // 3. Hoja Historial_Tasas
+  var rateSheet = ss.getSheetByName("Historial_Tasas") || ss.insertSheet("Historial_Tasas");
+  if (rateSheet.getLastRow() === 0) {
+    rateSheet.appendRow(["Fecha_Hora", "Evento", "Tasa_BCV", "Tasa_Binance", "Estrategia_Margen"]);
+  }
+  rateSheet.appendRow([data.timestamp, data.eventLabel, data.rateBCV, data.rateBinance, data.marginStrategy]);
+
+  return ContentService.createTextOutput(JSON.stringify({status: "ok"})).setMimeType(ContentService.MimeType.JSON);
+}`;
+            const ta = document.createElement('textarea');
+            ta.value = scriptCode;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('Código Google Apps Script copiado al portapapeles', 'success');
+        }
+
+        function connectGoogleSheetsAPI() {
+            const clientId = document.getElementById('google-client-id').value.trim();
+            const sheetId = document.getElementById('google-spreadsheet-id').value.trim();
+            if (!clientId || !sheetId) {
+                showToast('Completa tanto el Google Client ID como el Spreadsheet ID', 'warning');
+                return;
+            }
+            appState.googleClientId = clientId;
+            appState.googleSpreadsheetId = sheetId;
+            persistRealtime('Credenciales Google Sheets API guardadas');
+
+            try {
+                if (typeof google === 'undefined' || !google.accounts) {
+                    showToast('SDK de Google cargando, intenta en un segundo', 'warning');
+                    return;
+                }
+                const tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: clientId,
+                    scope: 'https://www.googleapis.com/auth/spreadsheets',
+                    callback: (tokenResponse) => {
+                        if (tokenResponse && tokenResponse.access_token) {
+                            googleAccessToken = tokenResponse.access_token;
+                            updateSheetsStatusUI('connected', 'Sincronizado con Google Sheets API');
+                            addSyncLog('Sesión OAuth2 iniciada con Google Sheets API v4.');
+                            syncNowToSheets();
+                            showToast('¡Google Sheets API v4 conectado!', 'success');
+                        }
+                    }
+                });
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } catch (err) {
+                console.error(err);
+                showToast('Error al iniciar OAuth2. Verifica tu Client ID', 'error');
+            }
+        }
+
+        async function executeGoogleSheetsSync(snapshot, eventLabel, extraEvent) {
+            const enrichedInventory = snapshot.inventory.map(p => {
+                const pr = calculatePrices(p.cost, p.margin, p.category);
+                return {
+                    sku: p.sku,
+                    name: p.name,
+                    category: p.category,
+                    stock: p.stock,
+                    cost: Number(p.cost.toFixed(2)),
+                    adjustedCostBCV: Number(pr.adjustedCostBCV.toFixed(2)),
+                    contadoUSD: Number(pr.contadoUSD.toFixed(2)),
+                    contadoBs: Number(pr.contadoBs.toFixed(2)),
+                    casheaUSD: Number(pr.casheaUSD.toFixed(2)),
+                    casheaBs: Number(pr.casheaBs.toFixed(2))
+                };
+            });
+
+            const payload = {
+                timestamp: new Date().toISOString(),
+                eventLabel,
+                rateBCV: snapshot.rateBCV,
+                rateBinance: snapshot.rateBinance,
+                marginStrategy: snapshot.marginStrategy,
+                inventory: enrichedInventory,
+                extraEvent
+            };
+
+            try {
+                // Modo 1: Google Apps Script Webhook
+                if (appState.sheetsWebhookUrl) {
+                    await fetch(appState.sheetsWebhookUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    pendingQueueCount = 0;
+                    updateSheetsStatusUI('connected', 'Sincronizado con Google Sheets');
+                    addSyncLog(`[Sheets Webhook] Filas enviadas (${enrichedInventory.length} SKUs) → ${eventLabel}`);
+                    return;
+                }
+
+                // Modo 2: Google Sheets API v4 Directa
+                if (googleAccessToken && appState.googleSpreadsheetId) {
+                    const sheetId = appState.googleSpreadsheetId;
+                    const values = [
+                        ['SKU', 'Producto', 'Categoría', 'Stock', 'Costo Base ($)', 'Ajustado BCV ($)', 'Contado ($)', 'Contado (Bs)', 'Cashea ($)', 'Cashea (Bs)', 'Última Act.'],
+                        ...enrichedInventory.map(r => [r.sku, r.name, r.category, r.stock, r.cost, r.adjustedCostBCV, r.contadoUSD, r.contadoBs, r.casheaUSD, r.casheaBs, payload.timestamp])
+                    ];
+
+                    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Inventario!A1:K${values.length}?valueInputOption=USER_ENTERED`, {
+                        method: 'PUT',
+                        headers: {
+                            Authorization: `Bearer ${googleAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ values })
+                    });
+
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+                    // Si hubo venta, anexar en Ventas_POS
+                    if (extraEvent && extraEvent.type === 'SALE') {
+                        const s = extraEvent.sale;
+                        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Ventas_POS!A1:J1:append?valueInputOption=USER_ENTERED`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${googleAccessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                values: [[s.id, s.date, s.mode, s.rateBCV, s.rateBinance, s.baseUSD.toFixed(2), s.ivaUSD.toFixed(2), s.casheaUSD.toFixed(2), s.totalUSD.toFixed(2), s.totalBs.toFixed(2)]]
+                            })
+                        });
+                    }
+
+                    pendingQueueCount = 0;
+                    updateSheetsStatusUI('connected', 'Sincronizado con Google Sheets');
+                    addSyncLog(`[Sheets API v4] Hoja "Inventario" actualizada en tiempo real.`);
+                }
+            } catch (err) {
+                updateSheetsStatusUI('local', `Modo Local / Cola pendiente (${pendingQueueCount})`);
+                addSyncLog(`[Error Sheets] ${err.message} — Respaldado localmente.`);
+            }
+        }
+
+        function syncNowToSheets() {
+            if (!appState.sheetsWebhookUrl && !(googleAccessToken && appState.googleSpreadsheetId)) {
+                showToast('Configura primero el Webhook o la API de Google Sheets', 'info');
+                return;
+            }
+            persistRealtime('Sincronización manual forzada');
+        }
+
+        function updateSheetsStatusUI(status, text) {
+            const headerText = document.getElementById('header-sync-text');
+            const pill = document.getElementById('sheets-connection-pill');
+            const lastTime = document.getElementById('sheets-last-sync-time');
+            const dot = document.getElementById('sidebar-sync-dot');
+
+            if (headerText) headerText.textContent = text;
+            if (pill) {
+                pill.textContent = text;
+                if (status === 'connected') {
+                    pill.className = 'px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30';
+                    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+                    if (lastTime) lastTime.textContent = `Última sinc: ${new Date().toLocaleTimeString('es-VE')}`;
+                } else if (status === 'syncing') {
+                    pill.className = 'px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30';
+                    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping';
+                } else {
+                    pill.className = 'px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30';
+                    if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+                }
+            }
+        }
+
+        function addSyncLog(msg) {
+            const box = document.getElementById('sync-log-box');
+            if (!box) return;
+            const time = new Date().toLocaleTimeString('es-VE');
+            const line = document.createElement('div');
+            line.textContent = `[${time}] ${msg}`;
+            box.prepend(line);
+        }
+
+        function exportCSV() {
+            const headers = ['SKU', 'Producto', 'Categoria', 'Stock', 'Costo_Base_USD', 'Costo_Ajustado_BCV', 'Precio_Contado_USD', 'Precio_Contado_Bs', 'Precio_Cashea_USD', 'Precio_Cashea_Bs'];
+            const rows = appState.inventory.map(p => {
+                const pr = calculatePrices(p.cost, p.margin, p.category);
+                return [
+                    p.sku,
+                    `"${p.name.replace(/"/g, '""')}"`,
+                    `"${p.category}"`,
+                    p.stock,
+                    p.cost.toFixed(2),
+                    pr.adjustedCostBCV.toFixed(2),
+                    pr.contadoUSD.toFixed(2),
+                    pr.contadoBs.toFixed(2),
+                    pr.casheaUSD.toFixed(2),
+                    pr.casheaBs.toFixed(2)
+                ].join(',');
+            });
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+            downloadBlob(csvContent, `Inventario_VenPOS_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+            showToast('Lista de precios exportada a Excel (CSV)', 'success');
+        }
+
+        function exportJSON() {
+            const jsonStr = JSON.stringify(appState, null, 2);
+            downloadBlob(jsonStr, `Respaldo_VenPOS_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+            showToast('Respaldo JSON descargado', 'success');
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported.inventory)) {
+                        appState = { ...appState, ...imported, cart: [] };
+                        document.getElementById('input-rate-bcv').value = appState.rateBCV.toFixed(2);
+                        document.getElementById('input-rate-binance').value = appState.rateBinance.toFixed(2);
+                        refreshAllUI();
+                        persistRealtime('Restauración desde JSON');
+                        showToast('Base de datos restaurada correctamente', 'success');
+                    }
+                } catch (err) {
+                    showToast('Archivo JSON inválido', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function downloadBlob(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ==========================================
+        // 10. UTILIDADES MODALES Y NOTIFICACIONES TOAST
+        // ==========================================
+        function openModal(id) {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const colors = {
+                success: 'bg-emerald-600 text-white border-emerald-400',
+                warning: 'bg-amber-500 text-slate-950 border-amber-300 font-bold',
+                error: 'bg-rose-600 text-white border-rose-400',
+                info: 'bg-slate-800 text-white border-slate-700'
+            };
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl border shadow-xl text-xs font-semibold flex items-center justify-between gap-3 transform transition-all duration-300 translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
